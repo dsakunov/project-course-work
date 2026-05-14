@@ -1,0 +1,10 @@
+package com.studenthub.deadlines;
+
+import java.util.List;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface DeadlineRepository extends JpaRepository<Deadline, Long> {
+
+	List<Deadline> findAllByOrderByDueDateAscCreatedAtDesc();
+}
