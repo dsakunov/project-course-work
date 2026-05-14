@@ -1,23 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="2069686d-6a3b-40f0-9a70-f1a6c555b452" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/backend/notes-service/.gitattributes" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/backend/notes-service/.gitignore" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/backend/notes-service/.mvn/wrapper/maven-wrapper.properties" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/backend/notes-service/mvnw" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/backend/notes-service/mvnw.cmd" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/backend/notes-service/pom.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/backend/notes-service/src/main/java/com/studenthub/notes/HealthController.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/backend/notes-service/src/main/java/com/studenthub/notes/NotesServiceApplication.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/backend/notes-service/src/main/resources/application.properties" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/backend/notes-service/src/test/java/com/studenthub/notes/NotesServiceApplicationTests.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/frontend/student-hub-ui/.gitignore" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/frontend/student-hub-ui/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/frontend/student-hub-ui/package.json" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/frontend/student-hub-ui/src/App.jsx" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/frontend/student-hub-ui/vite.config.js" afterDir="false" />
-    </list>
+    <list default="true" id="2069686d-6a3b-40f0-9a70-f1a6c555b452" name="Changes" comment="add notes-service" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -65,6 +49,11 @@
     "settings.editor.selected.configurable": "vcs.Git"
   }
 }]]></component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$" />
+    </key>
+  </component>
   <component name="TaskManager">
     <task active="true" id="Default" summary="Default task">
       <changelist id="2069686d-6a3b-40f0-9a70-f1a6c555b452" name="Changes" comment="" />
@@ -73,9 +62,22 @@
       <option name="presentableId" value="Default" />
       <updated>1774819068376</updated>
     </task>
+    <task id="LOCAL-00001" summary="add notes-service">
+      <option name="closed" value="true" />
+      <created>1778687304763</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1778687304763</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="add notes-service" />
+    <option name="LAST_COMMIT_MESSAGE" value="add notes-service" />
   </component>
 </project>
