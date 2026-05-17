@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,39 +27,44 @@ public class DeadlineController {
 	}
 
 	@GetMapping
-	public List<Deadline> getDeadlines() {
-		return deadlineRepository.findAllByOrderByDueDateAscCreatedAtDesc();
+	public List<Deadline> getDeadlines(@AuthenticationPrincipal AuthenticatedUser user) {
+		return deadlineRepository.findAllByUserIdOrderByDueDateAscCreatedAtDesc(user.userId());
 	}
 
 	@PostMapping
-	public ResponseEntity<Deadline> createDeadline(@RequestBody DeadlineRequest request) {
+	public ResponseEntity<Deadline> createDeadline(
+			@AuthenticationPrincipal AuthenticatedUser user,
+			@RequestBody DeadlineRequest request) {
 		Deadline deadline = new Deadline();
-		applyRequest(deadline, request);
+		applyRequest(deadline, request, user.userId());
 		return ResponseEntity.ok(deadlineRepository.save(deadline));
 	}
 
 	@PutMapping("/{id}")
-	public ResponseEntity<Deadline> updateDeadline(@PathVariable Long id, @RequestBody DeadlineRequest request) {
-		return deadlineRepository.findById(id)
+	public ResponseEntity<Deadline> updateDeadline(
+			@AuthenticationPrincipal AuthenticatedUser user,
+			@PathVariable Long id,
+			@RequestBody DeadlineRequest request) {
+		return deadlineRepository.findByIdAndUserId(id, user.userId())
 				.map(deadline -> {
-					applyRequest(deadline, request);
+					applyRequest(deadline, request, user.userId());
 					return ResponseEntity.ok(deadlineRepository.save(deadline));
 				})
 				.orElse(ResponseEntity.notFound().build());
 	}
 
 	@DeleteMapping("/{id}")
-	public ResponseEntity<Void> deleteDeadline(@PathVariable Long id) {
-		if (!deadlineRepository.existsById(id)) {
-			return ResponseEntity.notFound().build();
-		}
-
-		deadlineRepository.deleteById(id);
-		return ResponseEntity.noContent().build();
+	public ResponseEntity<Void> deleteDeadline(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable Long id) {
+		return deadlineRepository.findByIdAndUserId(id, user.userId())
+				.map(deadline -> {
+					deadlineRepository.delete(deadline);
+					return ResponseEntity.noContent().<Void>build();
+				})
+				.orElse(ResponseEntity.notFound().build());
 	}
 
-	private void applyRequest(Deadline deadline, DeadlineRequest request) {
-		deadline.setUserId(request.userId() != null ? request.userId() : 1L);
+	private void applyRequest(Deadline deadline, DeadlineRequest request, Long userId) {
+		deadline.setUserId(userId);
 		deadline.setTitle(clean(request.title(), "Без названия"));
 		deadline.setDueDate(request.dueDate() != null ? request.dueDate() : LocalDate.now());
 	}
