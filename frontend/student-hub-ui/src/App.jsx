@@ -1,8 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  BrowserRouter,
+  Link,
+  Navigate,
+  Route,
+  Routes,
+  useNavigate,
+} from 'react-router-dom';
 import './styles.css';
 
+const AUTH_API = 'http://localhost:8081/api/auth';
 const NOTES_API = 'http://localhost:8081/api/notes';
 const DEADLINES_API = 'http://localhost:8082/api/deadlines';
+const DASHBOARD_API = 'http://localhost:8082/api/dashboard';
+const TOKEN_KEY = 'studentHubToken';
 
 const emptyNote = {
   title: '',
@@ -15,8 +26,145 @@ const emptyDeadline = {
 };
 
 export default function App() {
+  const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY));
+
+  function saveToken(nextToken) {
+    localStorage.setItem(TOKEN_KEY, nextToken);
+    setToken(nextToken);
+  }
+
+  function logout() {
+    localStorage.removeItem(TOKEN_KEY);
+    setToken(null);
+  }
+
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route
+          path="/login"
+          element={
+            token ? (
+              <Navigate to="/" replace />
+            ) : (
+              <AuthPage mode="login" onToken={saveToken} />
+            )
+          }
+        />
+        <Route
+          path="/register"
+          element={
+            token ? (
+              <Navigate to="/" replace />
+            ) : (
+              <AuthPage mode="register" onToken={saveToken} />
+            )
+          }
+        />
+        <Route
+          path="/"
+          element={
+            token ? (
+              <HubPage token={token} onLogout={logout} />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
+function AuthPage({ mode, onToken }) {
+  const navigate = useNavigate();
+  const [form, setForm] = useState({ username: '', password: '' });
+  const [error, setError] = useState('');
+  const isRegister = mode === 'register';
+
+  async function submit(event) {
+    event.preventDefault();
+    setError('');
+
+    try {
+      const response = await fetch(`${AUTH_API}/${isRegister ? 'register' : 'login'}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(form),
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.message || 'Ошибка авторизации');
+      }
+
+      const body = await response.json();
+      onToken(body.token);
+      navigate('/');
+    } catch (requestError) {
+      setError(requestError.message);
+    }
+  }
+
+  return (
+    <main className="auth-shell">
+      <section className="auth-panel">
+        <p className="eyebrow">Student Hub</p>
+        <h1>{isRegister ? 'Регистрация' : 'Вход'}</h1>
+        <p className="auth-copy">
+          {isRegister
+            ? 'Создайте учебную учётную запись.'
+            : 'Войдите, чтобы открыть свои заметки и дедлайны.'}
+        </p>
+
+        {error && <p className="error-message">{error}</p>}
+
+        <form className="entry-form" onSubmit={submit}>
+          <label>
+            Логин
+            <input
+              required
+              minLength="3"
+              value={form.username}
+              onChange={(event) =>
+                setForm({ ...form, username: event.target.value })
+              }
+              placeholder="student"
+            />
+          </label>
+          <label>
+            Пароль
+            <input
+              required
+              minLength="4"
+              type="password"
+              value={form.password}
+              onChange={(event) =>
+                setForm({ ...form, password: event.target.value })
+              }
+              placeholder="password123"
+            />
+          </label>
+          <button type="submit">{isRegister ? 'Зарегистрироваться' : 'Войти'}</button>
+        </form>
+
+        <p className="auth-switch">
+          {isRegister ? 'Уже есть аккаунт?' : 'Нет аккаунта?'}{' '}
+          <Link to={isRegister ? '/login' : '/register'}>
+            {isRegister ? 'Войти' : 'Зарегистрироваться'}
+          </Link>
+        </p>
+      </section>
+    </main>
+  );
+}
+
+function HubPage({ token, onLogout }) {
   const [notes, setNotes] = useState([]);
   const [deadlines, setDeadlines] = useState([]);
+  const [dashboard, setDashboard] = useState(null);
   const [noteForm, setNoteForm] = useState(emptyNote);
   const [deadlineForm, setDeadlineForm] = useState(emptyDeadline);
   const [editingNoteId, setEditingNoteId] = useState(null);
@@ -24,26 +172,53 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const authHeaders = useMemo(
+    () => ({
+      Authorization: `Bearer ${token}`,
+    }),
+    [token],
+  );
+
   useEffect(() => {
     loadData();
   }, []);
+
+  async function authFetch(url, options = {}) {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        ...authHeaders,
+        ...options.headers,
+      },
+    });
+
+    if (response.status === 401 || response.status === 403) {
+      onLogout();
+      throw new Error('Сессия истекла. Войдите снова.');
+    }
+
+    return response;
+  }
 
   async function loadData() {
     setIsLoading(true);
     setError('');
 
     try {
-      const [notesResponse, deadlinesResponse] = await Promise.all([
-        fetch(NOTES_API),
-        fetch(DEADLINES_API),
-      ]);
+      const [notesResponse, deadlinesResponse, dashboardResponse] =
+        await Promise.all([
+          authFetch(NOTES_API),
+          authFetch(DEADLINES_API),
+          authFetch(DASHBOARD_API),
+        ]);
 
-      if (!notesResponse.ok || !deadlinesResponse.ok) {
+      if (!notesResponse.ok || !deadlinesResponse.ok || !dashboardResponse.ok) {
         throw new Error('Не удалось загрузить данные');
       }
 
       setNotes(await notesResponse.json());
       setDeadlines(await deadlinesResponse.json());
+      setDashboard(await dashboardResponse.json());
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -56,10 +231,11 @@ export default function App() {
     const url = editingNoteId ? `${NOTES_API}/${editingNoteId}` : NOTES_API;
     const method = editingNoteId ? 'PUT' : 'POST';
 
-    await sendJson(url, method, noteForm);
-    setNoteForm(emptyNote);
-    setEditingNoteId(null);
-    await loadData();
+    if (await sendJson(url, method, noteForm)) {
+      setNoteForm(emptyNote);
+      setEditingNoteId(null);
+      await loadData();
+    }
   }
 
   async function saveDeadline(event) {
@@ -69,15 +245,16 @@ export default function App() {
       : DEADLINES_API;
     const method = editingDeadlineId ? 'PUT' : 'POST';
 
-    await sendJson(url, method, deadlineForm);
-    setDeadlineForm(emptyDeadline);
-    setEditingDeadlineId(null);
-    await loadData();
+    if (await sendJson(url, method, deadlineForm)) {
+      setDeadlineForm(emptyDeadline);
+      setEditingDeadlineId(null);
+      await loadData();
+    }
   }
 
   async function sendJson(url, method, body) {
     setError('');
-    const response = await fetch(url, {
+    const response = await authFetch(url, {
       method,
       headers: {
         'Content-Type': 'application/json',
@@ -87,16 +264,19 @@ export default function App() {
 
     if (!response.ok) {
       setError('Не удалось сохранить данные');
+      return false;
     }
+
+    return true;
   }
 
   async function deleteNote(id) {
-    await fetch(`${NOTES_API}/${id}`, { method: 'DELETE' });
+    await authFetch(`${NOTES_API}/${id}`, { method: 'DELETE' });
     await loadData();
   }
 
   async function deleteDeadline(id) {
-    await fetch(`${DEADLINES_API}/${id}`, { method: 'DELETE' });
+    await authFetch(`${DEADLINES_API}/${id}`, { method: 'DELETE' });
     await loadData();
   }
 
@@ -133,10 +313,26 @@ export default function App() {
           <p className="eyebrow">Student Hub</p>
           <h1>Студенческий хаб</h1>
         </div>
-        <button className="secondary-button" type="button" onClick={loadData}>
-          Обновить
-        </button>
+        <div className="topbar-actions">
+          <button className="secondary-button" type="button" onClick={loadData}>
+            Обновить
+          </button>
+          <button className="danger-button" type="button" onClick={onLogout}>
+            Выйти
+          </button>
+        </div>
       </header>
+
+      {dashboard && (
+        <section className="summary-row" aria-label="Сводка">
+          <SummaryItem label="Заметки" value={dashboard.notesCount} />
+          <SummaryItem label="Дедлайны" value={dashboard.deadlinesCount} />
+          <SummaryItem
+            label="Связь сервисов"
+            value={dashboard.notesServiceAvailable ? 'OK' : 'Нет'}
+          />
+        </section>
+      )}
 
       {error && <p className="error-message">{error}</p>}
 
@@ -313,6 +509,15 @@ export default function App() {
         </article>
       </section>
     </main>
+  );
+}
+
+function SummaryItem({ label, value }) {
+  return (
+    <article className="summary-item">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </article>
   );
 }
 
