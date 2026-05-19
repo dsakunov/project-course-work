@@ -9,10 +9,14 @@ import {
 } from 'react-router-dom';
 import './styles.css';
 
-const AUTH_API = 'http://localhost:8081/api/auth';
-const NOTES_API = 'http://localhost:8081/api/notes';
-const DEADLINES_API = 'http://localhost:8082/api/deadlines';
-const DASHBOARD_API = 'http://localhost:8082/api/dashboard';
+const NOTES_SERVICE_URL =
+  import.meta.env.VITE_NOTES_SERVICE_URL || 'http://localhost:8081';
+const DEADLINES_SERVICE_URL =
+  import.meta.env.VITE_DEADLINES_SERVICE_URL || 'http://localhost:8082';
+const AUTH_API = `${NOTES_SERVICE_URL}/api/auth`;
+const NOTES_API = `${NOTES_SERVICE_URL}/api/notes`;
+const DEADLINES_API = `${DEADLINES_SERVICE_URL}/api/deadlines`;
+const DASHBOARD_API = `${DEADLINES_SERVICE_URL}/api/dashboard`;
 const TOKEN_KEY = 'studentHubToken';
 
 const emptyNote = {
@@ -204,26 +208,44 @@ function HubPage({ token, onLogout }) {
     setIsLoading(true);
     setError('');
 
-    try {
-      const [notesResponse, deadlinesResponse, dashboardResponse] =
-        await Promise.all([
-          authFetch(NOTES_API),
-          authFetch(DEADLINES_API),
-          authFetch(DASHBOARD_API),
-        ]);
+    const [notesResult, deadlinesResult, dashboardResult] = await Promise.allSettled([
+      authFetch(NOTES_API),
+      authFetch(DEADLINES_API),
+      authFetch(DASHBOARD_API),
+    ]);
 
-      if (!notesResponse.ok || !deadlinesResponse.ok || !dashboardResponse.ok) {
-        throw new Error('Не удалось загрузить данные');
-      }
+    const errors = [];
 
-      setNotes(await notesResponse.json());
-      setDeadlines(await deadlinesResponse.json());
-      setDashboard(await dashboardResponse.json());
-    } catch (requestError) {
-      setError(requestError.message);
-    } finally {
-      setIsLoading(false);
+    if (notesResult.status === 'fulfilled' && notesResult.value.ok) {
+      setNotes(await notesResult.value.json());
+    } else {
+      setNotes([]);
+      errors.push('Заметки временно недоступны');
     }
+
+    if (deadlinesResult.status === 'fulfilled' && deadlinesResult.value.ok) {
+      setDeadlines(await deadlinesResult.value.json());
+    } else {
+      errors.push('Не удалось загрузить дедлайны');
+    }
+
+    if (dashboardResult.status === 'fulfilled' && dashboardResult.value.ok) {
+      setDashboard(await dashboardResult.value.json());
+    } else {
+      errors.push('Не удалось загрузить сводку');
+    }
+
+    if (errors.length > 0) {
+      const authError = [
+        notesResult,
+        deadlinesResult,
+        dashboardResult,
+      ].find((result) => result.status === 'rejected');
+
+      setError(authError?.reason?.message || errors.join('. '));
+    }
+
+    setIsLoading(false);
   }
 
   async function saveNote(event) {
@@ -516,7 +538,7 @@ function SummaryItem({ label, value }) {
   return (
     <article className="summary-item">
       <span>{label}</span>
-      <strong>{value}</strong>
+      <strong>{value ?? 'Нет данных'}</strong>
     </article>
   );
 }
