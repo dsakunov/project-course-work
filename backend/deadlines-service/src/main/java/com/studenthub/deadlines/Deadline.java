@@ -29,6 +29,12 @@ public class Deadline {
 	@Column(nullable = false)
 	private LocalDate dueDate;
 
+	@Column(nullable = false, columnDefinition = "boolean default false")
+	private boolean completed = false;
+
+	@Column(nullable = false, columnDefinition = "boolean default false")
+	private boolean important = false;
+
 	@Column(nullable = false)
 	private LocalDateTime createdAt;
 
@@ -61,6 +67,22 @@ public class Deadline {
 
 	public void setDueDate(LocalDate dueDate) {
 		this.dueDate = dueDate;
+	}
+
+	public boolean isCompleted() {
+		return completed;
+	}
+
+	public void setCompleted(boolean completed) {
+		this.completed = completed;
+	}
+
+	public boolean isImportant() {
+		return important;
+	}
+
+	public void setImportant(boolean important) {
+		this.important = important;
 	}
 
 	public LocalDateTime getCreatedAt() {
