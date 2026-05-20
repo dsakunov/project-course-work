@@ -275,6 +275,7 @@ textarea {
 }
 
 .list-item {
+  position: relative;
   display: grid;
   gap: 14px;
   padding: 16px;
@@ -298,6 +299,147 @@ textarea {
   line-height: 1.55;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.deadline-card {
+  padding-right: 52px;
+}
+
+.deadline-card-urgent {
+  border-color: #fed7aa;
+  background: #fff7ed;
+}
+
+.deadline-card-completed {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.deadline-card-completed .deadline-title-row,
+.deadline-card-completed .deadline-date {
+  text-decoration: line-through;
+}
+
+.deadline-content {
+  min-width: 0;
+}
+
+.deadline-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.deadline-check input {
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  margin-top: 3px;
+  accent-color: #16a34a;
+}
+
+.deadline-text {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.deadline-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: #111827;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.deadline-date {
+  color: #475467;
+  font-size: 15px;
+}
+
+.important-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #b91c1c;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.important-badge span {
+  display: inline-grid;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  font-size: 11px;
+}
+
+.deadline-countdown {
+  align-self: center;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.deadline-countdown.overdue {
+  color: #dc2626;
+}
+
+.deadline-menu {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+
+.icon-button {
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  background: #ffffff;
+  line-height: 1;
+}
+
+.icon-button:hover {
+  background: #f8fafc;
+}
+
+.deadline-menu-list {
+  position: absolute;
+  z-index: 2;
+  top: 40px;
+  right: 0;
+  width: 180px;
+  border: 1px solid #d0d7e2;
+  border-radius: 8px;
+  padding: 6px;
+  background: #ffffff;
+  box-shadow: 0 18px 36px rgb(15 23 42 / 14%);
+}
+
+.deadline-menu-list button {
+  width: 100%;
+  justify-content: flex-start;
+  min-height: 34px;
+  padding: 0 10px;
+  color: #1f2937;
+  background: transparent;
+  text-align: left;
+}
+
+.deadline-menu-list button:hover {
+  background: #f1f5f9;
 }
 
 .muted {

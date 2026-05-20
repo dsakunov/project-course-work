@@ -17,7 +17,12 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/deadlines")
-@CrossOrigin(origins = { "http://localhost:5173", "http://127.0.0.1:5173" })
+@CrossOrigin(origins = {
+		"http://localhost:5173",
+		"http://127.0.0.1:5173",
+		"http://localhost:3000",
+		"http://127.0.0.1:3000"
+})
 public class DeadlineController {
 
 	private final DeadlineRepository deadlineRepository;
@@ -67,6 +72,8 @@ public class DeadlineController {
 		deadline.setUserId(userId);
 		deadline.setTitle(clean(request.title(), "Без названия"));
 		deadline.setDueDate(request.dueDate() != null ? request.dueDate() : LocalDate.now());
+		deadline.setCompleted(Boolean.TRUE.equals(request.completed()));
+		deadline.setImportant(Boolean.TRUE.equals(request.important()));
 	}
 
 	private String clean(String value, String fallback) {
