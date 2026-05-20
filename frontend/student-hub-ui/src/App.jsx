@@ -27,6 +27,8 @@ const emptyNote = {
 const emptyDeadline = {
   title: '',
   dueDate: new Date().toISOString().slice(0, 10),
+  completed: false,
+  important: false,
 };
 
 export default function App() {
@@ -173,6 +175,7 @@ function HubPage({ token, onLogout }) {
   const [deadlineForm, setDeadlineForm] = useState(emptyDeadline);
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [editingDeadlineId, setEditingDeadlineId] = useState(null);
+  const [openDeadlineMenuId, setOpenDeadlineMenuId] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -181,6 +184,10 @@ function HubPage({ token, onLogout }) {
       Authorization: `Bearer ${token}`,
     }),
     [token],
+  );
+  const sortedDeadlines = useMemo(
+    () => [...deadlines].sort(compareDeadlines),
+    [deadlines],
   );
 
   useEffect(() => {
@@ -270,6 +277,7 @@ function HubPage({ token, onLogout }) {
     if (await sendJson(url, method, deadlineForm)) {
       setDeadlineForm(emptyDeadline);
       setEditingDeadlineId(null);
+      setOpenDeadlineMenuId(null);
       await loadData();
     }
   }
@@ -299,7 +307,23 @@ function HubPage({ token, onLogout }) {
 
   async function deleteDeadline(id) {
     await authFetch(`${DEADLINES_API}/${id}`, { method: 'DELETE' });
+    setOpenDeadlineMenuId(null);
     await loadData();
+  }
+
+  async function updateDeadlineState(deadline, patch) {
+    const nextDeadline = {
+      title: deadline.title,
+      dueDate: deadline.dueDate,
+      completed: deadline.completed,
+      important: deadline.important,
+      ...patch,
+    };
+
+    if (await sendJson(`${DEADLINES_API}/${deadline.id}`, 'PUT', nextDeadline)) {
+      setOpenDeadlineMenuId(null);
+      await loadData();
+    }
   }
 
   function startNoteEdit(note) {
@@ -315,6 +339,8 @@ function HubPage({ token, onLogout }) {
     setDeadlineForm({
       title: deadline.title,
       dueDate: deadline.dueDate,
+      completed: deadline.completed,
+      important: deadline.important,
     });
   }
 
@@ -499,15 +525,76 @@ function HubPage({ token, onLogout }) {
           <div className="list">
             {isLoading ? (
               <p className="muted">Загрузка...</p>
-            ) : deadlines.length === 0 ? (
+            ) : sortedDeadlines.length === 0 ? (
               <p className="muted">Дедлайнов пока нет.</p>
             ) : (
-              deadlines.map((deadline) => (
-                <article className="list-item" key={deadline.id}>
-                  <div>
-                    <h3>{deadline.title}</h3>
-                    <p>{formatDate(deadline.dueDate)}</p>
+              sortedDeadlines.map((deadline) => {
+                const countdown = getDeadlineCountdown(deadline.dueDate);
+
+                return (
+                <article
+                  className={`list-item deadline-card ${getDeadlineCardClass(deadline)}`}
+                  key={deadline.id}
+                >
+                  <div className="deadline-menu">
+                    <button
+                      className="icon-button"
+                      type="button"
+                      aria-label="Меню дедлайна"
+                      onClick={() =>
+                        setOpenDeadlineMenuId(
+                          openDeadlineMenuId === deadline.id ? null : deadline.id,
+                        )
+                      }
+                    >
+                      ...
+                    </button>
+                    {openDeadlineMenuId === deadline.id && (
+                      <div className="deadline-menu-list">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateDeadlineState(deadline, {
+                              important: !deadline.important,
+                            })
+                          }
+                        >
+                          {deadline.important
+                            ? 'Убрать важное'
+                            : 'Отметить важным'}
+                        </button>
+                      </div>
+                    )}
                   </div>
+
+                  <div className="deadline-content">
+                    <label className="deadline-check">
+                      <input
+                        type="checkbox"
+                        checked={deadline.completed}
+                        onChange={(event) =>
+                          updateDeadlineState(deadline, {
+                            completed: event.target.checked,
+                          })
+                        }
+                      />
+                      <span className="deadline-text">
+                        <span className="deadline-title-row">
+                          <span>{deadline.title}</span>
+                          {deadline.important && (
+                            <strong className="important-badge">
+                              <span aria-hidden="true">!</span>
+                              Важное
+                            </strong>
+                          )}
+                        </span>
+                        <span className="deadline-date">
+                          {formatDate(deadline.dueDate)}
+                        </span>
+                      </span>
+                    </label>
+                  </div>
+
                   <div className="item-actions">
                     <button
                       className="secondary-button"
@@ -523,9 +610,13 @@ function HubPage({ token, onLogout }) {
                     >
                       Удалить
                     </button>
+                    <span className={`deadline-countdown ${countdown.isOverdue ? 'overdue' : ''}`}>
+                      {countdown.text}
+                    </span>
                   </div>
                 </article>
-              ))
+                );
+              })
             )}
           </div>
         </article>
@@ -543,10 +634,90 @@ function SummaryItem({ label, value }) {
   );
 }
 
+function compareDeadlines(first, second) {
+  const firstTime = parseLocalDate(first.dueDate).getTime();
+  const secondTime = parseLocalDate(second.dueDate).getTime();
+
+  if (firstTime !== secondTime) {
+    return firstTime - secondTime;
+  }
+
+  return first.id - second.id;
+}
+
+function getDeadlineCardClass(deadline) {
+  if (deadline.completed) {
+    return 'deadline-card-completed';
+  }
+
+  const daysLeft = getDaysLeft(deadline.dueDate);
+  if (daysLeft >= 0 && daysLeft <= 2) {
+    return 'deadline-card-urgent';
+  }
+
+  return '';
+}
+
+function getDeadlineCountdown(value) {
+  const daysLeft = getDaysLeft(value);
+
+  if (daysLeft < 0) {
+    return {
+      text: `Просрочено на ${formatDayWord(Math.abs(daysLeft))}`,
+      isOverdue: true,
+    };
+  }
+
+  if (daysLeft === 0) {
+    return {
+      text: 'Осталось: сегодня',
+      isOverdue: false,
+    };
+  }
+
+  return {
+    text: `Осталось: ${formatDayWord(daysLeft)}`,
+    isOverdue: false,
+  };
+}
+
+function getDaysLeft(value) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dueDate = parseLocalDate(value);
+  dueDate.setHours(0, 0, 0, 0);
+
+  return Math.round((dueDate.getTime() - today.getTime()) / 86400000);
+}
+
+function parseLocalDate(value) {
+  if (!value) {
+    return new Date();
+  }
+
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function formatDayWord(days) {
+  const mod10 = days % 10;
+  const mod100 = days % 100;
+
+  if (mod10 === 1 && mod100 !== 11) {
+    return `${days} день`;
+  }
+
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
+    return `${days} дня`;
+  }
+
+  return `${days} дней`;
+}
+
 function formatDate(value) {
   if (!value) {
     return 'Дата не указана';
   }
 
-  return new Intl.DateTimeFormat('ru-RU').format(new Date(value));
+  return new Intl.DateTimeFormat('ru-RU').format(parseLocalDate(value));
 }
