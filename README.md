@@ -1,4 +1,8 @@
 # project-course-work
+
+<img width="1850" height="917" alt="47-01 | 21 05 26_1" src="https://github.com/user-attachments/assets/acad764e-7252-4881-a7da-2581f16356ea" />
+<img width="1856" height="920" alt="47-01 | 21 05 26" src="https://github.com/user-attachments/assets/22ab0b83-883a-4dd1-ba18-0d669b865906" />
+
 ## Техническое задание для проекта «**Студенческий хаб**»
 
 ### 1. Краткое описание приложения
