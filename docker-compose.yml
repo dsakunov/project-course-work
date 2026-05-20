@@ -1,0 +1,78 @@
+services:
+  notes-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${NOTES_DB:-notes_db}
+      POSTGRES_USER: ${POSTGRES_USER:-student}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-student}
+    volumes:
+      - notes-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-student} -d ${NOTES_DB:-notes_db}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  deadlines-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DEADLINES_DB:-deadlines_db}
+      POSTGRES_USER: ${POSTGRES_USER:-student}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-student}
+    volumes:
+      - deadlines-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-student} -d ${DEADLINES_DB:-deadlines_db}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  notes-service:
+    build:
+      context: ./backend/notes-service
+    environment:
+      SERVER_PORT: 8080
+      SPRING_DATASOURCE_URL: jdbc:postgresql://notes-db:5432/${NOTES_DB:-notes_db}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-student}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-student}
+      JWT_SECRET: ${JWT_SECRET:-change_me_for_real_project}
+    ports:
+      - "${NOTES_SERVICE_PORT:-8081}:8080"
+    depends_on:
+      notes-db:
+        condition: service_healthy
+
+  deadlines-service:
+    build:
+      context: ./backend/deadlines-service
+    environment:
+      SERVER_PORT: 8080
+      SPRING_DATASOURCE_URL: jdbc:postgresql://deadlines-db:5432/${DEADLINES_DB:-deadlines_db}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-student}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-student}
+      JWT_SECRET: ${JWT_SECRET:-change_me_for_real_project}
+      NOTES_SERVICE_URL: http://notes-service:8080
+      HTTP_TIMEOUT_MILLIS: 2000
+    ports:
+      - "${DEADLINES_SERVICE_PORT:-8082}:8080"
+    depends_on:
+      deadlines-db:
+        condition: service_healthy
+      notes-service:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./frontend/student-hub-ui
+      args:
+        VITE_NOTES_SERVICE_URL: http://localhost:${NOTES_SERVICE_PORT:-8081}
+        VITE_DEADLINES_SERVICE_URL: http://localhost:${DEADLINES_SERVICE_PORT:-8082}
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      - notes-service
+      - deadlines-service
+
+volumes:
+  notes-db-data:
+  deadlines-db-data:
