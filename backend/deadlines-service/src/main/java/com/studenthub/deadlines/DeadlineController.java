@@ -4,8 +4,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.CrossOrigin;
+import jakarta.servlet.http.HttpSession;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -17,12 +16,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/deadlines")
-@CrossOrigin(origins = {
-		"http://localhost:5173",
-		"http://127.0.0.1:5173",
-		"http://localhost:3000",
-		"http://127.0.0.1:3000"
-})
 public class DeadlineController {
 
 	private final DeadlineRepository deadlineRepository;
@@ -32,35 +25,35 @@ public class DeadlineController {
 	}
 
 	@GetMapping
-	public List<Deadline> getDeadlines(@AuthenticationPrincipal AuthenticatedUser user) {
-		return deadlineRepository.findAllByUserIdOrderByDueDateAscCreatedAtDesc(user.userId());
+	public List<Deadline> getDeadlines(HttpSession session) {
+		return deadlineRepository.findAllByUserIdOrderByDueDateAscCreatedAtDesc(SessionUserResolver.get(session).userId());
 	}
 
 	@PostMapping
 	public ResponseEntity<Deadline> createDeadline(
-			@AuthenticationPrincipal AuthenticatedUser user,
+			HttpSession session,
 			@RequestBody DeadlineRequest request) {
 		Deadline deadline = new Deadline();
-		applyRequest(deadline, request, user.userId());
+		applyRequest(deadline, request, SessionUserResolver.get(session).userId());
 		return ResponseEntity.ok(deadlineRepository.save(deadline));
 	}
 
 	@PutMapping("/{id}")
 	public ResponseEntity<Deadline> updateDeadline(
-			@AuthenticationPrincipal AuthenticatedUser user,
+			HttpSession session,
 			@PathVariable Long id,
 			@RequestBody DeadlineRequest request) {
-		return deadlineRepository.findByIdAndUserId(id, user.userId())
+		return deadlineRepository.findByIdAndUserId(id, SessionUserResolver.get(session).userId())
 				.map(deadline -> {
-					applyRequest(deadline, request, user.userId());
+					applyRequest(deadline, request, SessionUserResolver.get(session).userId());
 					return ResponseEntity.ok(deadlineRepository.save(deadline));
 				})
 				.orElse(ResponseEntity.notFound().build());
 	}
 
 	@DeleteMapping("/{id}")
-	public ResponseEntity<Void> deleteDeadline(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable Long id) {
-		return deadlineRepository.findByIdAndUserId(id, user.userId())
+	public ResponseEntity<Void> deleteDeadline(HttpSession session, @PathVariable Long id) {
+		return deadlineRepository.findByIdAndUserId(id, SessionUserResolver.get(session).userId())
 				.map(deadline -> {
 					deadlineRepository.delete(deadline);
 					return ResponseEntity.noContent().<Void>build();

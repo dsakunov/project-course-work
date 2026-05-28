@@ -8,9 +8,9 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -20,17 +20,21 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class SecurityConfig {
 
 	@Bean
-	SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationFilter jwtAuthenticationFilter)
-			throws Exception {
+	SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+		CsrfTokenRequestAttributeHandler requestHandler = new CsrfTokenRequestAttributeHandler();
+
 		return http
-				.csrf(csrf -> csrf.disable())
+				.csrf(csrf -> csrf
+						.csrfTokenRequestHandler(requestHandler)
+						.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse()))
 				.cors(Customizer.withDefaults())
-				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(auth -> auth
 						.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 						.requestMatchers("/api/health").permitAll()
-						.anyRequest().authenticated())
-				.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+						.anyRequest().access((authentication, context) -> {
+							boolean loggedIn = SessionUserResolver.get(context.getRequest().getSession(false)) != null;
+							return new org.springframework.security.authorization.AuthorizationDecision(loggedIn);
+						}))
 				.build();
 	}
 
@@ -43,7 +47,8 @@ public class SecurityConfig {
 				"http://localhost:3000",
 				"http://127.0.0.1:3000"));
 		configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-		configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+		configuration.setAllowedHeaders(List.of("Content-Type", "X-XSRF-TOKEN"));
+		configuration.setAllowCredentials(true);
 
 		UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
 		source.registerCorsConfiguration("/**", configuration);
