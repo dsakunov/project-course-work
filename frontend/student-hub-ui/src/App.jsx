@@ -10,14 +10,14 @@ import {
 import './styles.css';
 
 const NOTES_SERVICE_URL =
-  import.meta.env.VITE_NOTES_SERVICE_URL || 'http://localhost:8081';
+    import.meta.env.VITE_NOTES_SERVICE_URL || 'http://localhost:8081';
 const DEADLINES_SERVICE_URL =
-  import.meta.env.VITE_DEADLINES_SERVICE_URL || 'http://localhost:8082';
+    import.meta.env.VITE_DEADLINES_SERVICE_URL || 'http://localhost:8082';
 const AUTH_API = `${NOTES_SERVICE_URL}/api/auth`;
 const NOTES_API = `${NOTES_SERVICE_URL}/api/notes`;
 const DEADLINES_API = `${DEADLINES_SERVICE_URL}/api/deadlines`;
 const DASHBOARD_API = `${DEADLINES_SERVICE_URL}/api/dashboard`;
-const TOKEN_KEY = 'studentHubToken';
+const CSRF_API = `${NOTES_SERVICE_URL}/api/csrf`;
 
 const emptyNote = {
   title: '',
@@ -32,57 +32,79 @@ const emptyDeadline = {
 };
 
 export default function App() {
-  const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY));
+  const [user, setUser] = useState(null);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
 
-  function saveToken(nextToken) {
-    localStorage.setItem(TOKEN_KEY, nextToken);
-    setToken(nextToken);
+  useEffect(() => {
+    checkSession();
+  }, []);
+
+  async function checkSession() {
+    try {
+      const response = await fetch(`${AUTH_API}/session`, {
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        setUser(await response.json());
+        await loadCsrfToken();
+      }
+    } finally {
+      setIsCheckingSession(false);
+    }
   }
 
-  function logout() {
-    localStorage.removeItem(TOKEN_KEY);
-    setToken(null);
+  async function logout() {
+    await fetch(`${AUTH_API}/logout`, {
+      method: 'POST',
+      credentials: 'include',
+    }).catch(() => null);
+    setUser(null);
+  }
+
+  if (isCheckingSession) {
+    return <main className="auth-shell"><p className="muted">Загрузка...</p></main>;
   }
 
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route
-          path="/login"
-          element={
-            token ? (
-              <Navigate to="/" replace />
-            ) : (
-              <AuthPage mode="login" onToken={saveToken} />
-            )
-          }
-        />
-        <Route
-          path="/register"
-          element={
-            token ? (
-              <Navigate to="/" replace />
-            ) : (
-              <AuthPage mode="register" onToken={saveToken} />
-            )
-          }
-        />
-        <Route
-          path="/"
-          element={
-            token ? (
-              <HubPage token={token} onLogout={logout} />
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          }
-        />
-      </Routes>
-    </BrowserRouter>
+      <BrowserRouter>
+        <Routes>
+          <Route
+              path="/login"
+              element={
+                user ? (
+                    <Navigate to="/" replace />
+                ) : (
+                    <AuthPage mode="login" onLogin={setUser} />
+                )
+              }
+          />
+          <Route
+              path="/register"
+              element={
+                user ? (
+                    <Navigate to="/" replace />
+                ) : (
+                    <AuthPage mode="register" onLogin={setUser} />
+                )
+              }
+          />
+          <Route
+              path="/"
+              element={
+                user ? (
+                    <HubPage onLogout={logout} />
+                ) : (
+                    <Navigate to="/login" replace />
+                )
+              }
+          />
+        </Routes>
+      </BrowserRouter>
   );
 }
 
-function AuthPage({ mode, onToken }) {
+function AuthPage({ mode, onLogin }) {
   const navigate = useNavigate();
   const [form, setForm] = useState({ username: '', password: '' });
   const [error, setError] = useState('');
@@ -99,6 +121,7 @@ function AuthPage({ mode, onToken }) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(form),
+        credentials: 'include',
       });
 
       if (!response.ok) {
@@ -107,7 +130,8 @@ function AuthPage({ mode, onToken }) {
       }
 
       const body = await response.json();
-      onToken(body.token);
+      await loadCsrfToken();
+      onLogin(body);
       navigate('/');
     } catch (requestError) {
       setError(requestError.message);
@@ -115,59 +139,59 @@ function AuthPage({ mode, onToken }) {
   }
 
   return (
-    <main className="auth-shell">
-      <section className="auth-panel">
-        <p className="eyebrow">Student Hub</p>
-        <h1>{isRegister ? 'Регистрация' : 'Вход'}</h1>
-        <p className="auth-copy">
-          {isRegister
-            ? 'Создайте учебную учётную запись.'
-            : 'Войдите, чтобы открыть свои заметки и дедлайны.'}
-        </p>
+      <main className="auth-shell">
+        <section className="auth-panel">
+          <p className="eyebrow">Student Hub</p>
+          <h1>{isRegister ? 'Регистрация' : 'Вход'}</h1>
+          <p className="auth-copy">
+            {isRegister
+                ? 'Создайте учебную учётную запись.'
+                : 'Войдите, чтобы открыть свои заметки и дедлайны.'}
+          </p>
 
-        {error && <p className="error-message">{error}</p>}
+          {error && <p className="error-message">{error}</p>}
 
-        <form className="entry-form" onSubmit={submit}>
-          <label>
-            Логин
-            <input
-              required
-              minLength="3"
-              value={form.username}
-              onChange={(event) =>
-                setForm({ ...form, username: event.target.value })
-              }
-              placeholder="student"
-            />
-          </label>
-          <label>
-            Пароль
-            <input
-              required
-              minLength="4"
-              type="password"
-              value={form.password}
-              onChange={(event) =>
-                setForm({ ...form, password: event.target.value })
-              }
-              placeholder="password123"
-            />
-          </label>
-          <button type="submit">{isRegister ? 'Зарегистрироваться' : 'Войти'}</button>
-        </form>
+          <form className="entry-form" onSubmit={submit}>
+            <label>
+              Логин
+              <input
+                  required
+                  minLength="3"
+                  value={form.username}
+                  onChange={(event) =>
+                      setForm({ ...form, username: event.target.value })
+                  }
+                  placeholder="student"
+              />
+            </label>
+            <label>
+              Пароль
+              <input
+                  required
+                  minLength="4"
+                  type="password"
+                  value={form.password}
+                  onChange={(event) =>
+                      setForm({ ...form, password: event.target.value })
+                  }
+                  placeholder="password123"
+              />
+            </label>
+            <button type="submit">{isRegister ? 'Зарегистрироваться' : 'Войти'}</button>
+          </form>
 
-        <p className="auth-switch">
-          {isRegister ? 'Уже есть аккаунт?' : 'Нет аккаунта?'}{' '}
-          <Link to={isRegister ? '/login' : '/register'}>
-            {isRegister ? 'Войти' : 'Зарегистрироваться'}
-          </Link>
-        </p>
-      </section>
-    </main>
+          <p className="auth-switch">
+            {isRegister ? 'Уже есть аккаунт?' : 'Нет аккаунта?'}{' '}
+            <Link to={isRegister ? '/login' : '/register'}>
+              {isRegister ? 'Войти' : 'Зарегистрироваться'}
+            </Link>
+          </p>
+        </section>
+      </main>
   );
 }
 
-function HubPage({ token, onLogout }) {
+function HubPage({ onLogout }) {
   const [notes, setNotes] = useState([]);
   const [deadlines, setDeadlines] = useState([]);
   const [dashboard, setDashboard] = useState(null);
@@ -179,15 +203,9 @@ function HubPage({ token, onLogout }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const authHeaders = useMemo(
-    () => ({
-      Authorization: `Bearer ${token}`,
-    }),
-    [token],
-  );
   const sortedDeadlines = useMemo(
-    () => [...deadlines].sort(compareDeadlines),
-    [deadlines],
+      () => [...deadlines].sort(compareDeadlines),
+      [deadlines],
   );
 
   useEffect(() => {
@@ -197,8 +215,9 @@ function HubPage({ token, onLogout }) {
   async function authFetch(url, options = {}) {
     const response = await fetch(url, {
       ...options,
+      credentials: 'include',
       headers: {
-        ...authHeaders,
+        ...csrfHeader(options.method),
         ...options.headers,
       },
     });
@@ -270,8 +289,8 @@ function HubPage({ token, onLogout }) {
   async function saveDeadline(event) {
     event.preventDefault();
     const url = editingDeadlineId
-      ? `${DEADLINES_API}/${editingDeadlineId}`
-      : DEADLINES_API;
+        ? `${DEADLINES_API}/${editingDeadlineId}`
+        : DEADLINES_API;
     const method = editingDeadlineId ? 'PUT' : 'POST';
 
     if (await sendJson(url, method, deadlineForm)) {
@@ -355,282 +374,301 @@ function HubPage({ token, onLogout }) {
   }
 
   return (
-    <main className="app-shell">
-      <header className="topbar">
-        <div>
-          <p className="eyebrow">Student Hub</p>
-          <h1>Студенческий хаб</h1>
-        </div>
-        <div className="topbar-actions">
-          <button className="secondary-button" type="button" onClick={loadData}>
-            Обновить
-          </button>
-          <button className="danger-button" type="button" onClick={onLogout}>
-            Выйти
-          </button>
-        </div>
-      </header>
-
-      {dashboard && (
-        <section className="summary-row" aria-label="Сводка">
-          <SummaryItem label="Заметки" value={dashboard.notesCount} />
-          <SummaryItem label="Дедлайны" value={dashboard.deadlinesCount} />
-          <SummaryItem
-            label="Связь сервисов"
-            value={dashboard.notesServiceAvailable ? 'OK' : 'Нет'}
-          />
-        </section>
-      )}
-
-      {error && <p className="error-message">{error}</p>}
-
-      <section className="workspace" aria-label="Учебные данные">
-        <article className="panel">
-          <div className="panel-heading">
-            <div>
-              <div className="card-marker" aria-hidden="true" />
-              <h2>Заметки</h2>
-            </div>
-            <span className="counter">{notes.length}</span>
+      <main className="app-shell">
+        <header className="topbar">
+          <div>
+            <p className="eyebrow">Student Hub</p>
+            <h1>Студенческий хаб</h1>
           </div>
+          <div className="topbar-actions">
+            <button className="secondary-button" type="button" onClick={loadData}>
+              Обновить
+            </button>
+            <button className="danger-button" type="button" onClick={onLogout}>
+              Выйти
+            </button>
+          </div>
+        </header>
 
-          <form className="entry-form" onSubmit={saveNote}>
-            <label>
-              Название
-              <input
-                required
-                value={noteForm.title}
-                onChange={(event) =>
-                  setNoteForm({ ...noteForm, title: event.target.value })
-                }
-                placeholder="Лабораторная работа"
+        {dashboard && (
+            <section className="summary-row" aria-label="Сводка">
+              <SummaryItem label="Заметки" value={dashboard.notesCount} />
+              <SummaryItem label="Дедлайны" value={dashboard.deadlinesCount} />
+              <SummaryItem
+                  label="Связь сервисов"
+                  value={dashboard.notesServiceAvailable ? 'OK' : 'Нет'}
               />
-            </label>
-            <label>
-              Текст
-              <textarea
-                required
-                rows="4"
-                value={noteForm.content}
-                onChange={(event) =>
-                  setNoteForm({ ...noteForm, content: event.target.value })
-                }
-                placeholder="Сдать отчёт по Java"
-              />
-            </label>
-            <div className="form-actions">
-              <button type="submit">
-                {editingNoteId ? 'Сохранить' : 'Добавить'}
-              </button>
-              {editingNoteId && (
-                <button
-                  className="secondary-button"
-                  type="button"
-                  onClick={cancelNoteEdit}
-                >
-                  Отмена
+            </section>
+        )}
+
+        {error && <p className="error-message">{error}</p>}
+
+        <section className="workspace" aria-label="Учебные данные">
+          <article className="panel">
+            <div className="panel-heading">
+              <div>
+                <div className="card-marker" aria-hidden="true" />
+                <h2>Заметки</h2>
+              </div>
+              <span className="counter">{notes.length}</span>
+            </div>
+
+            <form className="entry-form" onSubmit={saveNote}>
+              <label>
+                Название
+                <input
+                    required
+                    value={noteForm.title}
+                    onChange={(event) =>
+                        setNoteForm({ ...noteForm, title: event.target.value })
+                    }
+                    placeholder="Лабораторная работа"
+                />
+              </label>
+              <label>
+                Текст
+                <textarea
+                    required
+                    rows="4"
+                    value={noteForm.content}
+                    onChange={(event) =>
+                        setNoteForm({ ...noteForm, content: event.target.value })
+                    }
+                    placeholder="Сдать отчёт по Java"
+                />
+              </label>
+              <div className="form-actions">
+                <button type="submit">
+                  {editingNoteId ? 'Сохранить' : 'Добавить'}
                 </button>
+                {editingNoteId && (
+                    <button
+                        className="secondary-button"
+                        type="button"
+                        onClick={cancelNoteEdit}
+                    >
+                      Отмена
+                    </button>
+                )}
+              </div>
+            </form>
+
+            <div className="list">
+              {isLoading ? (
+                  <p className="muted">Загрузка...</p>
+              ) : notes.length === 0 ? (
+                  <p className="muted">Заметок пока нет.</p>
+              ) : (
+                  notes.map((note) => (
+                      <article className="list-item" key={note.id}>
+                        <div>
+                          <h3>{note.title}</h3>
+                          <p>{note.content}</p>
+                        </div>
+                        <div className="item-actions">
+                          <button
+                              className="secondary-button"
+                              type="button"
+                              onClick={() => startNoteEdit(note)}
+                          >
+                            Изменить
+                          </button>
+                          <button
+                              className="danger-button"
+                              type="button"
+                              onClick={() => deleteNote(note.id)}
+                          >
+                            Удалить
+                          </button>
+                        </div>
+                      </article>
+                  ))
               )}
             </div>
-          </form>
+          </article>
 
-          <div className="list">
-            {isLoading ? (
-              <p className="muted">Загрузка...</p>
-            ) : notes.length === 0 ? (
-              <p className="muted">Заметок пока нет.</p>
-            ) : (
-              notes.map((note) => (
-                <article className="list-item" key={note.id}>
-                  <div>
-                    <h3>{note.title}</h3>
-                    <p>{note.content}</p>
-                  </div>
-                  <div className="item-actions">
-                    <button
-                      className="secondary-button"
-                      type="button"
-                      onClick={() => startNoteEdit(note)}
-                    >
-                      Изменить
-                    </button>
-                    <button
-                      className="danger-button"
-                      type="button"
-                      onClick={() => deleteNote(note.id)}
-                    >
-                      Удалить
-                    </button>
-                  </div>
-                </article>
-              ))
-            )}
-          </div>
-        </article>
-
-        <article className="panel">
-          <div className="panel-heading">
-            <div>
-              <div className="card-marker deadline-marker" aria-hidden="true" />
-              <h2>Дедлайны</h2>
+          <article className="panel">
+            <div className="panel-heading">
+              <div>
+                <div className="card-marker deadline-marker" aria-hidden="true" />
+                <h2>Дедлайны</h2>
+              </div>
+              <span className="counter">{deadlines.length}</span>
             </div>
-            <span className="counter">{deadlines.length}</span>
-          </div>
 
-          <form className="entry-form" onSubmit={saveDeadline}>
-            <label>
-              Название
-              <input
-                required
-                value={deadlineForm.title}
-                onChange={(event) =>
-                  setDeadlineForm({
-                    ...deadlineForm,
-                    title: event.target.value,
-                  })
-                }
-                placeholder="Защита проекта"
-              />
-            </label>
-            <label>
-              Дата
-              <input
-                required
-                type="date"
-                value={deadlineForm.dueDate}
-                onChange={(event) =>
-                  setDeadlineForm({
-                    ...deadlineForm,
-                    dueDate: event.target.value,
-                  })
-                }
-              />
-            </label>
-            <div className="form-actions">
-              <button type="submit">
-                {editingDeadlineId ? 'Сохранить' : 'Добавить'}
-              </button>
-              {editingDeadlineId && (
-                <button
-                  className="secondary-button"
-                  type="button"
-                  onClick={cancelDeadlineEdit}
-                >
-                  Отмена
+            <form className="entry-form" onSubmit={saveDeadline}>
+              <label>
+                Название
+                <input
+                    required
+                    value={deadlineForm.title}
+                    onChange={(event) =>
+                        setDeadlineForm({
+                          ...deadlineForm,
+                          title: event.target.value,
+                        })
+                    }
+                    placeholder="Защита проекта"
+                />
+              </label>
+              <label>
+                Дата
+                <input
+                    required
+                    type="date"
+                    value={deadlineForm.dueDate}
+                    onChange={(event) =>
+                        setDeadlineForm({
+                          ...deadlineForm,
+                          dueDate: event.target.value,
+                        })
+                    }
+                />
+              </label>
+              <div className="form-actions">
+                <button type="submit">
+                  {editingDeadlineId ? 'Сохранить' : 'Добавить'}
                 </button>
-              )}
-            </div>
-          </form>
-
-          <div className="list">
-            {isLoading ? (
-              <p className="muted">Загрузка...</p>
-            ) : sortedDeadlines.length === 0 ? (
-              <p className="muted">Дедлайнов пока нет.</p>
-            ) : (
-              sortedDeadlines.map((deadline) => {
-                const countdown = getDeadlineCountdown(deadline.dueDate);
-
-                return (
-                <article
-                  className={`list-item deadline-card ${getDeadlineCardClass(deadline)}`}
-                  key={deadline.id}
-                >
-                  <div className="deadline-menu">
+                {editingDeadlineId && (
                     <button
-                      className="icon-button"
-                      type="button"
-                      aria-label="Меню дедлайна"
-                      onClick={() =>
-                        setOpenDeadlineMenuId(
-                          openDeadlineMenuId === deadline.id ? null : deadline.id,
-                        )
-                      }
+                        className="secondary-button"
+                        type="button"
+                        onClick={cancelDeadlineEdit}
                     >
-                      ...
+                      Отмена
                     </button>
-                    {openDeadlineMenuId === deadline.id && (
-                      <div className="deadline-menu-list">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            updateDeadlineState(deadline, {
-                              important: !deadline.important,
-                            })
-                          }
+                )}
+              </div>
+            </form>
+
+            <div className="list">
+              {isLoading ? (
+                  <p className="muted">Загрузка...</p>
+              ) : sortedDeadlines.length === 0 ? (
+                  <p className="muted">Дедлайнов пока нет.</p>
+              ) : (
+                  sortedDeadlines.map((deadline) => {
+                    const countdown = getDeadlineCountdown(deadline.dueDate);
+
+                    return (
+                        <article
+                            className={`list-item deadline-card ${getDeadlineCardClass(deadline)}`}
+                            key={deadline.id}
                         >
-                          {deadline.important
-                            ? 'Убрать важное'
-                            : 'Отметить важным'}
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                          <div className="deadline-menu">
+                            <button
+                                className="icon-button"
+                                type="button"
+                                aria-label="Меню дедлайна"
+                                onClick={() =>
+                                    setOpenDeadlineMenuId(
+                                        openDeadlineMenuId === deadline.id ? null : deadline.id,
+                                    )
+                                }
+                            >
+                              ...
+                            </button>
+                            {openDeadlineMenuId === deadline.id && (
+                                <div className="deadline-menu-list">
+                                  <button
+                                      type="button"
+                                      onClick={() =>
+                                          updateDeadlineState(deadline, {
+                                            important: !deadline.important,
+                                          })
+                                      }
+                                  >
+                                    {deadline.important
+                                        ? 'Убрать важное'
+                                        : 'Отметить важным'}
+                                  </button>
+                                </div>
+                            )}
+                          </div>
 
-                  <div className="deadline-content">
-                    <label className="deadline-check">
-                      <input
-                        type="checkbox"
-                        checked={deadline.completed}
-                        onChange={(event) =>
-                          updateDeadlineState(deadline, {
-                            completed: event.target.checked,
-                          })
-                        }
-                      />
-                      <span className="deadline-text">
+                          <div className="deadline-content">
+                            <label className="deadline-check">
+                              <input
+                                  type="checkbox"
+                                  checked={deadline.completed}
+                                  onChange={(event) =>
+                                      updateDeadlineState(deadline, {
+                                        completed: event.target.checked,
+                                      })
+                                  }
+                              />
+                              <span className="deadline-text">
                         <span className="deadline-title-row">
                           <span>{deadline.title}</span>
                           {deadline.important && (
-                            <strong className="important-badge">
-                              <span aria-hidden="true">!</span>
-                              Важное
-                            </strong>
+                              <strong className="important-badge">
+                                <span aria-hidden="true">!</span>
+                                Важное
+                              </strong>
                           )}
                         </span>
                         <span className="deadline-date">
                           {formatDate(deadline.dueDate)}
                         </span>
                       </span>
-                    </label>
-                  </div>
+                            </label>
+                          </div>
 
-                  <div className="item-actions">
-                    <button
-                      className="secondary-button"
-                      type="button"
-                      onClick={() => startDeadlineEdit(deadline)}
-                    >
-                      Изменить
-                    </button>
-                    <button
-                      className="danger-button"
-                      type="button"
-                      onClick={() => deleteDeadline(deadline.id)}
-                    >
-                      Удалить
-                    </button>
-                    <span className={`deadline-countdown ${countdown.isOverdue ? 'overdue' : ''}`}>
+                          <div className="item-actions">
+                            <button
+                                className="secondary-button"
+                                type="button"
+                                onClick={() => startDeadlineEdit(deadline)}
+                            >
+                              Изменить
+                            </button>
+                            <button
+                                className="danger-button"
+                                type="button"
+                                onClick={() => deleteDeadline(deadline.id)}
+                            >
+                              Удалить
+                            </button>
+                            <span className={`deadline-countdown ${countdown.isOverdue ? 'overdue' : ''}`}>
                       {countdown.text}
                     </span>
-                  </div>
-                </article>
-                );
-              })
-            )}
-          </div>
-        </article>
-      </section>
-    </main>
+                          </div>
+                        </article>
+                    );
+                  })
+              )}
+            </div>
+          </article>
+        </section>
+      </main>
   );
+}
+
+async function loadCsrfToken() {
+  await fetch(CSRF_API, {
+    credentials: 'include',
+  }).catch(() => null);
+}
+
+function csrfHeader(method) {
+  if (!method || method === 'GET') {
+    return {};
+  }
+
+  const token = document.cookie
+      .split('; ')
+      .find((row) => row.startsWith('XSRF-TOKEN='))
+      ?.split('=')[1];
+
+  return token ? { 'X-XSRF-TOKEN': decodeURIComponent(token) } : {};
 }
 
 function SummaryItem({ label, value }) {
   return (
-    <article className="summary-item">
-      <span>{label}</span>
-      <strong>{value ?? 'Нет данных'}</strong>
-    </article>
+      <article className="summary-item">
+        <span>{label}</span>
+        <strong>{value ?? 'Нет данных'}</strong>
+      </article>
   );
 }
 

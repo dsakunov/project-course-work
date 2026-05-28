@@ -27,6 +27,14 @@ services:
       timeout: 3s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   notes-service:
     build:
       context: ./backend/notes-service
@@ -35,11 +43,14 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://notes-db:5432/${NOTES_DB:-notes_db}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-student}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-student}
-      JWT_SECRET: ${JWT_SECRET:-change_me_for_real_project}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     ports:
       - "${NOTES_SERVICE_PORT:-8081}:8080"
     depends_on:
       notes-db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   deadlines-service:
@@ -50,7 +61,8 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://deadlines-db:5432/${DEADLINES_DB:-deadlines_db}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-student}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-student}
-      JWT_SECRET: ${JWT_SECRET:-change_me_for_real_project}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       NOTES_SERVICE_URL: http://notes-service:8080
       HTTP_TIMEOUT_MILLIS: 2000
     ports:
@@ -60,6 +72,8 @@ services:
         condition: service_healthy
       notes-service:
         condition: service_started
+      redis:
+        condition: service_healthy
 
   frontend:
     build:
